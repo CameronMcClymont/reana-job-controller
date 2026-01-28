@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/CameronMcClymont/reana-job-controller/compare/0.9.4...0.9.5) (2026-01-28)
+
+
+### Build
+
+* **deps:** update reana-auth-vomsproxy to 1.3.1 ([#486](https://github.com/CameronMcClymont/reana-job-controller/issues/486)) ([1827c82](https://github.com/CameronMcClymont/reana-job-controller/commit/1827c8248793d1c08a9843904fccf04bb4fba30b))
+* **deps:** update reana-auth-vomsproxy to 1.3.1 ([#486](https://github.com/CameronMcClymont/reana-job-controller/issues/486)) ([dacbfa0](https://github.com/CameronMcClymont/reana-job-controller/commit/dacbfa03490d0374701664e77dbaf70a8a00e3fc))
+
+
+### Features
+
+* **job-manager:** add `user-uuid` label to runtime job pods ([#496](https://github.com/CameronMcClymont/reana-job-controller/issues/496)) ([a3479a1](https://github.com/CameronMcClymont/reana-job-controller/commit/a3479a1ab5a2747595aacc6ed86e6831a0c286c8))
+* **job-manager:** add Kueue scheduling option for user workloads ([#492](https://github.com/CameronMcClymont/reana-job-controller/issues/492)) ([f014442](https://github.com/CameronMcClymont/reana-job-controller/commit/f0144421bdd280f4c0a4f919b3af98b17d66e4c5))
+* **kubernetes:** add resource settings in Kubernetes jobs ([#484](https://github.com/CameronMcClymont/reana-job-controller/issues/484)) ([1827c82](https://github.com/CameronMcClymont/reana-job-controller/commit/1827c8248793d1c08a9843904fccf04bb4fba30b))
+* **kubernetes:** add resource settings in Kubernetes jobs ([#484](https://github.com/CameronMcClymont/reana-job-controller/issues/484)) ([4753ce2](https://github.com/CameronMcClymont/reana-job-controller/commit/4753ce227efa2bd5b48046d0e650569a0c91abf4))
+
+
+### Bug fixes
+
+* **config:** update reana-auth-vomsproxy to 1.3.1 to fix WLCG IAM ([#481](https://github.com/CameronMcClymont/reana-job-controller/issues/481)) ([48c362f](https://github.com/CameronMcClymont/reana-job-controller/commit/48c362fc975d9ee0e18af2f4fcd5ede6ed923134))
+
+
+### Continuous integration
+
+* **commitlint:** fix local running of commit linter on macOS ([#487](https://github.com/CameronMcClymont/reana-job-controller/issues/487)) ([7cd4707](https://github.com/CameronMcClymont/reana-job-controller/commit/7cd4707b5fac76cb671a67d7af102cd1db543442))
+* **jsonlint:** add JSON linting ([#491](https://github.com/CameronMcClymont/reana-job-controller/issues/491)) ([872a983](https://github.com/CameronMcClymont/reana-job-controller/commit/872a9838336ed273cc4835d865e24d270e7936f2))
+* **markdownlint:** add Markdown linting ([#491](https://github.com/CameronMcClymont/reana-job-controller/issues/491)) ([3809916](https://github.com/CameronMcClymont/reana-job-controller/commit/380991695984d80ff1762f706ce18037a2c202f3))
+* **prettier:** add Prettier code formatting checks ([#491](https://github.com/CameronMcClymont/reana-job-controller/issues/491)) ([128ca8d](https://github.com/CameronMcClymont/reana-job-controller/commit/128ca8d5ddf2347aeb8f98929a6d380a3ef47b27))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#486](https://github.com/CameronMcClymont/reana-job-controller/issues/486)) ([1827c82](https://github.com/CameronMcClymont/reana-job-controller/commit/1827c8248793d1c08a9843904fccf04bb4fba30b))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#486](https://github.com/CameronMcClymont/reana-job-controller/issues/486)) ([bfbbd7c](https://github.com/CameronMcClymont/reana-job-controller/commit/bfbbd7c63e12ca3f56cc13fd356c3db389af7bf7))
+* **shfmt:** add shell script formatting checks ([#491](https://github.com/CameronMcClymont/reana-job-controller/issues/491)) ([65a7389](https://github.com/CameronMcClymont/reana-job-controller/commit/65a7389336e0865c8a827ce95aeedeec1c505b86))
+* **yamllint:** add YAML linting ([#489](https://github.com/CameronMcClymont/reana-job-controller/issues/489)) ([112afe5](https://github.com/CameronMcClymont/reana-job-controller/commit/112afe5812b0d6b570ef5bfda532769fb4863f6d)), closes [#488](https://github.com/CameronMcClymont/reana-job-controller/issues/488)
+
 ## [0.9.4](https://github.com/reanahub/reana-job-controller/compare/0.9.3...0.9.4) (2024-11-29)
 
 ### Build
