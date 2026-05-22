@@ -64,6 +64,7 @@ from reana_job_controller.config import (
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_MIN_USER_UID,
+    REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM,
     REANA_USER_ID,
     KUEUE_ENABLED,
     KUEUE_LOCAL_QUEUE_NAME,
@@ -210,7 +211,14 @@ class KubernetesJobManager(JobManager):
                                 "name": "job",
                                 "env": [],
                                 "volumeMounts": [],
-                                "securityContext": {"allowPrivilegeEscalation": False},
+                                "securityContext": {
+                                    "allowPrivilegeEscalation": False,
+                                    **(
+                                        {"readOnlyRootFilesystem": True}
+                                        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM
+                                        else {}
+                                    ),
+                                },
                             }
                         ],
                         "initContainers": [],
