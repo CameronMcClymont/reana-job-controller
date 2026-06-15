@@ -228,7 +228,10 @@ REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM = bool(
 """Whether to mount a read-only root filesystem in user job pods.
 
 When enabled, writes to paths inside the container image are rejected while
-mounted workspace volumes remain writable.
+mounted workspace volumes remain writable. ``TMPDIR`` and ``XDG_CACHE_HOME``
+are redirected to per-job directories inside the workspace (unless the user
+already set them), so software that hardcodes paths like ``/tmp`` will fail.
+Host-path mounts default to read-only unless a mount sets ``readOnly: false``.
 """
 
 SLURM_HEADNODE_HOSTNAME = os.getenv("SLURM_HOSTNAME", "hpc-batch.cern.ch")

@@ -9,6 +9,7 @@
 import ast
 import logging
 import os
+import shlex
 import traceback
 from typing import Optional
 
@@ -178,6 +179,24 @@ class KubernetesJobManager(JobManager):
         """Execute a job in Kubernetes."""
         backend_job_id = build_unique_component_name("run-job")
 
+        # `self.cmd` is persisted to the job database as the command submitted
+        # by the user, so the runtime-only scratch-directory wrapper must live
+        # in a separate command that is used only inside the pod spec.
+        runtime_cmd = self.cmd
+        workspace_tmp = workspace_cache = None
+        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+            workspace_tmp = os.path.join(
+                self.workflow_workspace, ".reana", "tmp", backend_job_id
+            )
+            workspace_cache = os.path.join(
+                self.workflow_workspace, ".reana", "cache", backend_job_id
+            )
+            runtime_cmd = (
+                f"mkdir -p {shlex.quote(workspace_tmp)} {shlex.quote(workspace_cache)} && "
+                + self.cmd
+            )
+        self._runtime_cmd = runtime_cmd
+
         self.job = {
             "kind": "Job",
             "apiVersion": "batch/v1",
@@ -207,7 +226,7 @@ class KubernetesJobManager(JobManager):
                             {
                                 "image": self.docker_img,
                                 "command": ["bash", "-c"],
-                                "args": [self.cmd],
+                                "args": [runtime_cmd],
                                 "name": "job",
                                 "env": [],
                                 "volumeMounts": [],
@@ -243,6 +262,20 @@ class KubernetesJobManager(JobManager):
         if self.env_vars:
             for var, value in self.env_vars.items():
                 job_spec["containers"][0]["env"].append({"name": var, "value": value})
+
+        # Redirect temporary and cache files of conforming software into the
+        # workspace, since the rest of the filesystem is read-only. Checked
+        # after secret and user env vars are added, so that values explicitly
+        # set by the user take precedence over this default.
+        if REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM:
+            container_env = job_spec["containers"][0]["env"]
+            existing_env_names = {env_var["name"] for env_var in container_env}
+            for name, value in (
+                ("TMPDIR", workspace_tmp),
+                ("XDG_CACHE_HOME", workspace_cache),
+            ):
+                if name not in existing_env_names:
+                    container_env.append({"name": name, "value": value})
 
         self.add_resource_requests_and_limits(job_spec)
         self.add_hostpath_volumes()
@@ -525,6 +558,9 @@ class KubernetesJobManager(JobManager):
             volume_mount = {
                 "name": mount["name"],
                 "mountPath": mount.get("mountPath", mount["hostPath"]),
+                "readOnly": mount.get(
+                    "readOnly", REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM
+                ),
             }
             volume = {"name": mount["name"], "hostPath": {"path": mount["hostPath"]}}
             volumes_to_mount.append((volume_mount, volume))
@@ -572,7 +608,7 @@ class KubernetesJobManager(JobManager):
 
         # Extend the main job command to create a file after it's finished
         self.job["spec"]["template"]["spec"]["containers"][0]["args"] = [
-            f"trap 'touch {KRB5_STATUS_FILE_LOCATION}' EXIT; " + self.cmd
+            f"trap 'touch {KRB5_STATUS_FILE_LOCATION}' EXIT; " + self._runtime_cmd
         ]
 
     def _add_voms_proxy_init_container(self, secrets_volume_mount, secret_env_vars):

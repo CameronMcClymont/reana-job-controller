@@ -9,6 +9,7 @@
 """REANA-Job-Controller Job Manager tests."""
 
 import json
+import os
 import uuid
 
 import mock
@@ -404,3 +405,166 @@ def test_set_user_id(
     else:
         job_manager.set_user_id(kubernetes_uid)
         assert job_manager.kubernetes_uid == expected_value
+
+
+@pytest.mark.parametrize("read_only", [False, True])
+def test_execute_kubernetes_job_read_only_root_filesystem(
+    app,
+    session,
+    sample_serial_workflow_in_db,
+    sample_workflow_workspace,
+    user0,
+    empty_user_secrets,
+    corev1_api_client_with_user_secrets,
+    monkeypatch,
+    read_only,
+):
+    """Test that the read-only root filesystem option shapes the job spec."""
+    workflow_uuid = sample_serial_workflow_in_db.id_
+    workflow_workspace = next(sample_workflow_workspace(str(workflow_uuid)))
+    expected_command = "ls"
+    monkeypatch.setenv("REANA_USER_ID", str(user0.id_))
+    job_manager = KubernetesJobManager(
+        docker_img="docker.io/library/busybox",
+        cmd=expected_command,
+        env_vars={},
+        workflow_uuid=workflow_uuid,
+        workflow_workspace=workflow_workspace,
+    )
+    hostpath_mounts = [
+        {"name": "data", "hostPath": "/data"},
+        {"name": "scratch", "hostPath": "/scratch", "readOnly": False},
+    ]
+
+    with mock.patch(
+        "reana_job_controller.kubernetes_job_manager.current_k8s_batchv1_api_client"
+    ) as kubernetes_client, mock.patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(empty_user_secrets),
+    ), mock.patch(
+        "reana_job_controller.kubernetes_job_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        read_only,
+    ), mock.patch(
+        "reana_job_controller.kubernetes_job_manager.REANA_JOB_HOSTPATH_MOUNTS",
+        hostpath_mounts,
+    ):
+        backend_job_id = job_manager.execute()
+
+    body = kubernetes_client.create_namespaced_job.call_args[1]["body"]
+    container = body["spec"]["template"]["spec"]["containers"][0]
+    security_context = container["securityContext"]
+    env = {env_var["name"]: env_var["value"] for env_var in container["env"]}
+    volume_mounts = {vm["name"]: vm for vm in container["volumeMounts"]}
+
+    # the user's command is persisted unchanged in the job database
+    created_job = session.query(Job).filter_by(backend_job_id=backend_job_id).one()
+    assert created_job.cmd == json.dumps(expected_command)
+
+    # host-path mounts default to read-only only when the option is on,
+    # and per-mount overrides are respected
+    assert volume_mounts["data"]["readOnly"] is read_only
+    assert volume_mounts["scratch"]["readOnly"] is False
+
+    workspace_tmp = os.path.join(workflow_workspace, ".reana", "tmp", backend_job_id)
+    workspace_cache = os.path.join(
+        workflow_workspace, ".reana", "cache", backend_job_id
+    )
+    if read_only:
+        assert security_context["readOnlyRootFilesystem"] is True
+        assert env["TMPDIR"] == workspace_tmp
+        assert env["XDG_CACHE_HOME"] == workspace_cache
+        assert container["args"] == [
+            f"mkdir -p {workspace_tmp} {workspace_cache} && {expected_command}"
+        ]
+    else:
+        assert "readOnlyRootFilesystem" not in security_context
+        assert "TMPDIR" not in env
+        assert "XDG_CACHE_HOME" not in env
+        assert container["args"] == [expected_command]
+
+
+def test_execute_kubernetes_job_read_only_keeps_user_env_vars(
+    app,
+    session,
+    sample_serial_workflow_in_db,
+    sample_workflow_workspace,
+    user0,
+    empty_user_secrets,
+    corev1_api_client_with_user_secrets,
+    monkeypatch,
+):
+    """Test that user-provided TMPDIR/XDG_CACHE_HOME are not overwritten."""
+    workflow_uuid = sample_serial_workflow_in_db.id_
+    workflow_workspace = next(sample_workflow_workspace(str(workflow_uuid)))
+    monkeypatch.setenv("REANA_USER_ID", str(user0.id_))
+    job_manager = KubernetesJobManager(
+        docker_img="docker.io/library/busybox",
+        cmd="ls",
+        env_vars={"TMPDIR": "/eos/scratch"},
+        workflow_uuid=workflow_uuid,
+        workflow_workspace=workflow_workspace,
+    )
+
+    with mock.patch(
+        "reana_job_controller.kubernetes_job_manager.current_k8s_batchv1_api_client"
+    ) as kubernetes_client, mock.patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(empty_user_secrets),
+    ), mock.patch(
+        "reana_job_controller.kubernetes_job_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    ):
+        job_manager.execute()
+
+    body = kubernetes_client.create_namespaced_job.call_args[1]["body"]
+    container = body["spec"]["template"]["spec"]["containers"][0]
+    tmpdir_values = [
+        env_var["value"] for env_var in container["env"] if env_var["name"] == "TMPDIR"
+    ]
+    assert tmpdir_values == ["/eos/scratch"]
+    assert any(env_var["name"] == "XDG_CACHE_HOME" for env_var in container["env"])
+
+
+def test_execute_kubernetes_job_read_only_with_kerberos(
+    app,
+    session,
+    sample_serial_workflow_in_db,
+    sample_workflow_workspace,
+    user0,
+    kerberos_user_secrets,
+    corev1_api_client_with_user_secrets,
+    monkeypatch,
+):
+    """Test that the Kerberos trap wraps the scratch-directory wrapper."""
+    workflow_uuid = sample_serial_workflow_in_db.id_
+    workflow_workspace = next(sample_workflow_workspace(str(workflow_uuid)))
+    expected_command = "ls"
+    monkeypatch.setenv("REANA_USER_ID", str(user0.id_))
+    job_manager = KubernetesJobManager(
+        docker_img="docker.io/library/busybox",
+        cmd=expected_command,
+        env_vars={},
+        workflow_uuid=workflow_uuid,
+        workflow_workspace=workflow_workspace,
+        kerberos=True,
+    )
+
+    with mock.patch(
+        "reana_job_controller.kubernetes_job_manager.current_k8s_batchv1_api_client"
+    ) as kubernetes_client, mock.patch(
+        "reana_commons.k8s.secrets.current_k8s_corev1_api_client",
+        corev1_api_client_with_user_secrets(kerberos_user_secrets),
+    ), mock.patch(
+        "reana_job_controller.kubernetes_job_manager."
+        "REANA_KUBERNETES_JOBS_READ_ONLY_ROOT_FILESYSTEM",
+        True,
+    ):
+        job_manager.execute()
+
+    body = kubernetes_client.create_namespaced_job.call_args[1]["body"]
+    command = body["spec"]["template"]["spec"]["containers"][0]["args"][0]
+    assert command.startswith("trap")
+    assert "mkdir -p" in command
+    assert command.endswith(expected_command)
